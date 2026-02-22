@@ -10,25 +10,25 @@ function DataApi(){
 
     useEffect(() => {
         const getInitData = async () =>{
-        try{
-            const [brandsData, equipmentData, locationsData, modelsData, providersData] = await Promise.all([
-                getCollectionData('brands'),
-                getCollectionData('equipment_types'),
-                getCollectionData('locations'),
-                getCollectionData('models'),
-                getCollectionData('providers'),
-            ]);
-            setBrands(brandsData);
-            setEquipmentTypes(equipmentData);
-            setLocations(locationsData);
-            setModels(modelsData);
-            setProviders(providersData);
-        }catch(e: any){
-            console.error(e);
+            try{
+                const [brandsData, equipmentData, locationsData, modelsData, providersData] = await Promise.all([
+                    getCollectionData('brands'),
+                    getCollectionData('equipment_types'),
+                    getCollectionData('locations'),
+                    getCollectionData('models'),
+                    getCollectionData('providers'),
+                ]);
+                setBrands(brandsData);
+                setEquipmentTypes(equipmentData);
+                setLocations(locationsData);
+                setModels(modelsData);
+                setProviders(providersData);
+            }catch(e: any){
+                console.error(e);
+            }
         }
-    }
-    getInitData();
-}, []);
+        getInitData();
+    }, []);
 
     return {
         brands,

@@ -1,382 +1,299 @@
-import AppDataGrid from '../components/DevExtremme/DataGrid.tsx';
 import MultiViewComponent from '../components/DevExtremme/MultiView.tsx';
-import type { GridColumn, FormItemProps, ToastProps } from '../interfaces/index';
-import { useState, useMemo, useCallback } from 'react';
+import type { GridColumn, FormItemProps, ToastRef, PopupRef } from '../interfaces/index';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Button } from 'devextreme-react';
+import AppDataGrid from '../components/DevExtremme/DataGrid.tsx';
 import FormComponent from '../components/DevExtremme/FormComponent.tsx';
-import AppPopup from '../components/DevExtremme/Popup.tsx';
-import AppToast from '../components/DevExtremme/Toast.tsx';
 import DataApi from '../hook/DataApi.tsx';
 import ProductApi from '../hook/ProductHook/ProductApi.tsx';
+import AppPopup from '../components/DevExtremme/Popup.tsx';
+import AppToast from '../components/DevExtremme/Toast.tsx';
+
+const emptyFormData = {
+  equipmentTypeId: null,
+  brandId: null,
+  modelId: null,
+  providerId: null,
+  locationId: null,
+  serialNumber: '',
+  purchaseDate: null,
+  purchasePrice: null,
+  status: null
+};
 
 const Products = () => {
-  const [select, setSelect] = useState({ _id: null, status: true }); //almacenar el producto seleccionado
-  const [viewIndex, setViewIndex] = useState(0); //cambia de vista
-  const [visible, setVisible] = useState(false); //para el popup
-  const [toast, setToast] = useState<ToastProps>({
-    visible: false,
-    message: ''
-  }); //para el toast
-  const [newProduct, setNewProduct] = useState(1); //para diferenciar entre nuevo y editar
+  const { brands, equipmentTypes, locations, models, providers } = DataApi();
+  const { products, patchProductData, putProductData, postProductData } = ProductApi();
 
-  const emptyFormData = {
-    name: '',
-    equipmentTypeId: null,
-    brandId: null,
-    modelId: null,
-    providerId: null,
-    locationId: null,
-    serialNumber: '',
-    purchaseDate: null,
-    purchasePrice: null,
-    stock: null,
-    status: null
-  };
+  const [select, setSelect] = useState({ _id: null, status: true });
+  const [viewIndex, setViewIndex] = useState(0);
+  const [newProduct, setNewProduct] = useState(1);
+  const [formData, setFormData] = useState(emptyFormData);
+  const [modelFlt, setModelFlt] = useState([]);
 
-  const [formData, setFormData] = useState(emptyFormData); //almacenar los datos del formulario
+  const formRef = useRef<any>(null);
+  const popupRef = useRef<PopupRef>(null);
+  const toastRef = useRef<ToastRef>(null);
 
-  const { brands, equipmentTypes, locations, models, providers } = DataApi(); //obtener datos de marcas, tipos de equipo, ubicaciones, modelos y proveedores
-  const { products, patchProductData, putProductData, postProductData } = ProductApi(); //obtener datos de productos
-
-  //funciones del grid
-  const handleGridAdd = useCallback(() =>{
+  const handleGridAdd = useCallback(() => {
     setSelect({ _id: null, status: true });
     setNewProduct(1);
     setViewIndex(1);
     setFormData(emptyFormData);
-  },[]);
-  
-  const handleGridEdit = useCallback((cellData: any) =>{
+  }, []);
+
+  const handleGridEdit = useCallback((cellData: any) => {
     setSelect(cellData.data);
     setNewProduct(0);
     setViewIndex(1);
-    setFormData({
-      name: cellData.data.name,
-      equipmentTypeId: cellData.data.equipmentTypeId,
-      brandId: cellData.data.brandId,
-      modelId: cellData.data.modelId,
-      providerId: cellData.data.providerId,
-      locationId: cellData.data.locationId,
-      serialNumber: cellData.data.serialNumber,
-      purchaseDate: cellData.data.purchaseDate,
-      purchasePrice: cellData.data.purchasePrice,
-      stock: cellData.data.stock,
-      status: cellData.data.status
-    });
-  },[]);
-  
-  const handleGridCancel = useCallback((cellData: any) =>{
+
+    const { _id, ...dataWithoutId } = cellData.data; 
+
+    setFormData(dataWithoutId);
+  }, []);
+
+  const handleGridCancel = useCallback((cellData: any) => {
     setSelect(cellData.data);
-    setVisible(true);
-  },[]);
-  
-  //toolbarItems del grid
-  const toolbarItems = useMemo(() =>
-    [
-      {
-        location: 'before',
-        widget: 'dxButton',
-        options: {
-          icon: 'plus',
-          text: 'Agregar',
-          type: 'default',
-          onClick: handleGridAdd
+    popupRef.current?.show(
+      "Confirmación",
+      "¿Desea cambiar el estado del producto?",
+      async () => {
+        try {
+          const selectRow = cellData.data;
+          const status = selectRow.status ? 0 : 1;
+          const response = await patchProductData(selectRow._id, status);
+
+          if (response) {
+            popupRef.current?.hide();
+            toastRef.current?.show(`Producto ${status ? 'activado' : 'desactivado'} exitosamente`, 'success');
+          }
+        } catch (e: any) {
+          toastRef.current?.show('Error al actualizar el producto', 'error');
         }
       }
-    ],[handleGridAdd]
-  );
+    );
+  }, [patchProductData]);
 
-  //iconos de la columna estado
-  const iconStatus = useCallback((cellData: any) => {
-    return (
-      <div className="text-center">
-            {cellData.value ? <span className="dx-icon-check text-green-500"></span> : <span className="dx-icon-close text-red-500"></span>}
-      </div>
-    )
-  },[]);
-
-  
-
-  //botones de la última columna
-  const renderActionButtons = useCallback((cellData: any) =>{
-    return (
-      <div className="flex gap-1 justify-center">
-                <Button
-                    hint="Editar"
-                    icon="edit"
-                    onClick= {() => handleGridEdit(cellData)}
-                />
-                <Button
-                    hint={cellData.data.status ? 'Desactivar' : 'Activar'}
-                    icon={cellData.data.status ? 'close' : 'check'}
-                    onClick={() => handleGridCancel(cellData)}
-                />
-            </div>
-    )
-  },[handleGridEdit, handleGridCancel]);
-
-  //columnas del grid
-  const columns = useMemo<GridColumn[]>(() =>[
-    { dataField: "_id", caption: "ID", visible: false },
-    { dataField: "name", caption: "Producto", allowHeaderFiltering: false },
-    { dataField: "brandId", caption: "Marca", allowHeaderFiltering: false,
-      lookup: {
-        dataSource: brands,
-        valueExpr: '_id',
-        displayExpr: 'name'
+  const toolbarItems = useMemo(() => [
+    {
+      location: 'before',
+      widget: 'dxButton',
+      options: {
+        icon: 'plus',
+        text: 'Agregar',
+        type: 'default',
+        onClick: handleGridAdd
       }
+    }
+  ], [handleGridAdd]);
+
+  const iconStatus = useCallback((cellData: any) => (
+    <div className="text-center">
+      {cellData.value
+        ? <span className="dx-icon-check text-green-500"></span>
+        : <span className="dx-icon-close text-red-500"></span>}
+    </div>
+  ), []);
+
+  const renderActionButtons = useCallback((cellData: any) => (
+    <div className="flex gap-1 justify-center">
+      <Button
+        hint="Editar"
+        icon="edit"
+        onClick={() => handleGridEdit(cellData)}
+      />
+      <Button
+        hint={cellData.data.status ? 'Desactivar' : 'Activar'}
+        icon={cellData.data.status ? 'close' : 'check'}
+        onClick={() => handleGridCancel(cellData)}
+      />
+    </div>
+  ), [handleGridEdit, handleGridCancel]);
+
+  const columns = useMemo<GridColumn[]>(() => [
+    { dataField: "_id", visible: false },
+    {
+      dataField: "equipmentTypeId",
+      caption: "Tipo de equipo",
+      lookup: { dataSource: equipmentTypes, valueExpr: '_id', displayExpr: 'name' }
     },
-    { dataField: "modelId", caption: "Modelo", allowHeaderFiltering: false,
-      lookup: {
-        dataSource: models,
-        valueExpr: '_id',
-        displayExpr: 'name'
-      }
+    {
+      dataField: 'serialNumber',
+      caption: 'Número de Serie'
     },
-    { dataField: "stock", caption: "Stock", width: 100, allowHeaderFiltering: false },
-    { dataField: "purchasePrice", caption: "Precio", width: 120, allowHeaderFiltering: false },
-    { dataField: "status", caption: "Estado", width: 120, headerFilter: {
-        dataSource: [
-          { text: "Activo", value: true },
-          { text: "Inactivo", value: false }
-        ]
-      },
-      cellRender: (cellData: any) => iconStatus(cellData)
+    {
+      dataField: "brandId",
+      caption: "Marca",
+      lookup: { dataSource: brands, valueExpr: '_id', displayExpr: 'name' }
     },
-    { dataField: "equipmentTypeId", caption: "Tipo de equipo", width: 120, visible: false },
-    { dataField: "providerId", caption: "Proveedor", visible: false },
-    { dataField: "locationId", caption: "Ubicación", visible: false },
-    { dataField: "serialNumber", caption: "Número de serie", visible: false },
-    { dataField: "purchaseDate", caption: "Fecha de compra", visible: false },
+    {
+      dataField: "modelId",
+      caption: "Modelo",
+      lookup: { dataSource: models, valueExpr: '_id', displayExpr: 'name' }
+    },
+    {
+      dataField: "providerId",
+      caption: "Proveedor",
+      lookup: { dataSource: providers, valueExpr: '_id', displayExpr: 'name' }
+    },
+    { dataField: "purchasePrice", width: 120 },
+    {
+      dataField: "status",
+      caption: "Estado",
+      width: 120,
+      cellRender: iconStatus
+    },
     {
       type: 'buttons',
       width: 110,
-      cellRender: (cellData: any) => renderActionButtons(cellData)
+      cellRender: renderActionButtons
     }
-  ],[brands, models, handleGridEdit, handleGridCancel]);
+  ], [brands, models, iconStatus, renderActionButtons]);
 
-  //FormComponent props
   const items: FormItemProps[] = useMemo(() => [
-  {
-    dataField: 'name',
-    label: { text: 'Nombre' },
-    editorType: 'dxTextBox',
-    editorOptions: {
-      placeholder: 'Ingrese el nombre del producto'
-    },
-    validationRules: [
-      { type: 'required', message: 'El nombre del producto es obligatorio' }
-    ]
-  },
-  {
-    dataField: 'equipmentTypeId',
-    label: { text: 'Tipo de equipo' },
-    editorType: 'dxSelectBox',
-    editorOptions: {
-      placeholder: 'Seleccione un tipo de equipo',
-      dataSource: equipmentTypes,
-      valueExpr: '_id',
-      displayExpr: 'name'
-    },
-    validationRules: [
-      { type: 'required', message: 'El tipo de equipo es obligatorio' }
-    ]
-  },
-  {
-    dataField: 'brandId',
-    label: { text: 'Marca' },
-    editorType: 'dxSelectBox',
-    editorOptions: {
-      placeholder: 'Seleccione una marca',
-      dataSource: brands,
-      valueExpr: '_id',
-      displayExpr: 'name'
-    },
-    validationRules: [
-      { type: 'required', message: 'La marca es obligatoria' }
-    ]
-  },
-  {
-    dataField: 'modelId',
-    label: { text: 'Modelo' },
-    editorType: 'dxSelectBox',
-    editorOptions: {
-      placeholder: 'Seleccione un modelo',
-      dataSource: models,
-      valueExpr: '_id',
-      displayExpr: 'name'
-    },
-    validationRules: [
-      { type: 'required', message: 'El modelo es obligatorio' }
-    ]
-  },
-  {
-    dataField: 'providerId',
-    label: { text: 'Proveedor' },
-    editorType: 'dxSelectBox',
-    editorOptions: {
-      placeholder: 'Seleccione un proveedor',
-      dataSource: providers,
-      valueExpr: '_id',
-      displayExpr: 'name'
-    }
-  },
-  {
-    dataField: 'locationId',
-    label: { text: 'Ubicación' },
-    editorType: 'dxSelectBox',
-    editorOptions: {
-      placeholder: 'Seleccione una ubicación',
-      dataSource: locations,
-      valueExpr: '_id',
-      displayExpr: 'name'
-    }
-  },
-  {
-    dataField: 'serialNumber',
-    label: { text: 'Número de serie' },
-    editorType: 'dxTextBox',
-    editorOptions: {
-      placeholder: 'Ingrese el número de serie'
-    },
-    validationRules: [
-      { type: 'required', message: 'El número de serie es obligatorio' }
-    ]
-  },
-  {
-    dataField: 'purchaseDate',
-    label: { text: 'Fecha de compra' },
-    editorType: 'dxDateBox',
-    editorOptions: {
-      type: 'date'
-    }
-  },
-  {
-    dataField: 'purchasePrice',
-    label: { text: 'Precio de compra' },
-    editorType: 'dxNumberBox',
-    editorOptions: {
-      placeholder: 'Ingrese el precio de compra',
-      format: '#,##0.00',
-      min: 0
-    }
-  },
-  {
-    dataField: 'stock',
-    label: { text: 'Stock' },
-    editorType: 'dxNumberBox',
-    editorOptions: {
-      placeholder: 'Ingrese el stock',
-      min: 0
-    }
-  }
-  ], [brands, models, equipmentTypes, locations, providers]);
-
-  //funciones de popup
-  const handlePopupVisible = useCallback<any>(() =>{
-    setVisible(false);
-  },[]);
-
-  //Buttons de popup
-  const handlePopupAceppt = useCallback(async () =>{
-    try{
-      const status = select.status ? 0 : 1;
-      const resU = await patchProductData(select._id, status);
-      if(resU){
-        setVisible(false);
-        setToast({
-          visible: true,
-          message: status == 1 ? 'Producto activado' : 'Producto desactivado',
-          type: 'success',
-        });
-      }
-    }catch(e: any){
-      console.error(e);
-      setToast({ visible: true, message: e.response.data.message, type: 'warning' })
-    }
-  }, [select])
-
-  const handlePopupCancel = useCallback(() =>{
-    setVisible(false);
-  }, [])
-
-  const buttons = useMemo<any[]>(() =>
-    [
-      {
-        toolbar: 'bottom',
-        widget: 'dxButton',
-        options:{
-          text: 'Aceptar',
-          type: 'default',
-          icon: 'check',
-          onClick: handlePopupAceppt
+    {
+      dataField: 'brandId',
+      label: { text: 'Marca' },
+      editorType: 'dxSelectBox',
+      editorOptions: {
+        placeholder: 'Seleccione una marca',
+        dataSource: brands,
+        valueExpr: '_id',
+        displayExpr: 'name',
+        onValueChanged: (e: any) =>{
+          let mdlFlt = models.filter((mdl: any) => mdl.brandId == e.value);
+          setModelFlt(mdlFlt);
         }
       },
-      {
-        toolbar: 'bottom',
-        widget: 'dxButton',
-        options:{
-          text: 'Cancelar',
-          type: 'normal',
-          icon: 'close',
-          onClick: handlePopupCancel
-        }
+      validationRules: [{ type: 'required' }]
+    },
+    {
+      dataField: 'modelId',
+      label: { text: 'Modelo' },
+      editorType: 'dxSelectBox',
+      editorOptions: {
+        placeholder: 'Seleccione un modelo',
+        dataSource: modelFlt,
+        valueExpr: '_id',
+        displayExpr: 'name',
+        disabled: !formData.brandId
+      },
+      validationRules: [{ type: 'required' }]
+    },
+    {
+      dataField: 'equipmentTypeId',
+      label: { text: 'Tipo de Equipo' },
+      editorType: 'dxSelectBox',
+      editorOptions: {
+        placeholder: 'Seleccione un tipo de equipo',
+        dataSource: equipmentTypes,
+        valueExpr: '_id',
+        displayExpr: 'name'
+      },
+      validationRules: [{ type: 'required' }]
+    },
+    {
+      dataField: 'providerId',
+      label: { text: 'Proveedor' },
+      editorType: 'dxSelectBox',
+      editorOptions: {
+        placeholder: 'Seleccione un proveedor',
+        dataSource: providers,
+        valueExpr: '_id',
+        displayExpr: 'name'
+      },
+      validationRules: [{ type: 'required' }]
+    },
+    {
+      dataField: 'locationId',
+      label: { text: 'Ubicación' },
+      editorType: 'dxSelectBox',
+      editorOptions: {
+        placeholder: 'Seleccione una ubicación',
+        dataSource: locations,
+        valueExpr: '_id',
+        displayExpr: 'name'
+      },
+      validationRules: [{ type: 'required' }]
+    },
+    {
+      dataField: 'serialNumber',
+      label: { text: 'Número de Serie' },
+      editorType: 'dxTextBox',
+      editorOptions:{
+        placeholder: 'Ingrese el número de serie'
+      }      
+    },
+    {
+      dataField: 'purchaseDate',
+      label: { text: 'Fecha de Compra' },
+      editorType: 'dxDateBox',
+      editorOptions: {
+        placeholder: 'Seleccione la fecha de compra',
+        displayFormat: 'dd/MM/yyyy'
       }
-    ],[handlePopupAceppt, handlePopupCancel]);
+    },
+    {
+      dataField: 'purchasePrice',
+      label: { text: 'Precio de Compra' },
+      editorType: 'dxNumberBox',
+      editorOptions: {
+        placeholder: 'Ingrese el precio de compra',
+        format: 'currency',
+        currency: 'USD'
+      },
+      validationRules: [{ type: 'required' }]
+    }
+  ], [brands, modelFlt, equipmentTypes, providers, locations]);
+
+  const handleSave = useCallback(async () => {
+    try {
+      let response;
+      
+      const validation = formRef.current?.instance.validate();
+
+      if (!validation.isValid) {
+        toastRef.current?.show('Por favor, complete todos los campos requeridos', 'warning');
+        return;
+      }
+
+      if (newProduct === 1) {
+        response = await postProductData({ ...formData, status: true });
+      } else {
+        response = await putProductData(select._id, formData);
+      }
+
+      if (response) {
+        setViewIndex(0);
+      }
+    } catch (e: any) {
+    }
+  }, [formData, newProduct, select._id, postProductData, putProductData]);
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Gestión de Productos</h1>
-      {/* Example content */}
+
       <div className="mt-6 bg-white p-4 rounded-lg shadow">
-        <MultiViewComponent selectedIndex={viewIndex} animationEnabled={true} swipeEnabled={true}>
+        <MultiViewComponent selectedIndex={viewIndex}>
           <AppDataGrid
             data={products}
             columns={columns}
             keyExpr="_id"
             toolbarItems={toolbarItems}
           />
+
           <>
-            <div className='flex justify-between items-center mb-3'>
+            <div className='flex justify-between mb-3'>
               <h1>{newProduct === 1 ? "Nuevo Producto" : "Editar Producto"}</h1>
               <div className='flex gap-3'>
-                <Button
-                  icon="save"
-                  text="Guardar"
-                  onClick={async () => {
-                    try{
-                      const modifyFormData = {...formData, status: true};
-                      let resU, resA;
-
-                      if(newProduct == 1){
-                        resA = await postProductData(modifyFormData);
-                      }else{
-                        resU = await putProductData(select._id,formData);
-                      }
-
-                      if(resA || resU){
-                        setViewIndex(0);
-                        setToast({
-                          visible: true,
-                          message: resA ? 'Producto guardado con éxito' : 'Producto actualizado con éxito',
-                          type: 'success',
-                        });
-                      }
-                    }catch(e: any){
-                      console.error(e);
-                      setToast({ visible: true, message: e.response.data.message, type: 'warning' })
-                    }
-                  }}
-                  type="success"
-                />
-                <Button
-                  icon="arrowleft"
-                  text="Volver"
-                  onClick={() => setViewIndex(0)}
-                />
+                <Button icon="save" text="Guardar" onClick={handleSave} type="success" />
+                <Button icon="arrowleft" text="Volver" onClick={() => setViewIndex(0)} />
               </div>
             </div>
+
             <FormComponent
+              ref={formRef}
               formData={formData}
               items={items}
               colCount={2}
@@ -385,18 +302,10 @@ const Products = () => {
             />
           </>
         </MultiViewComponent>
-      </div>
 
-      <AppToast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        displayTime={toast?.displayTime}
-        onHiding={() => setToast({...toast, visible: false })}
-      />
-      <AppPopup visible={visible} onHiding={handlePopupVisible} title={select.status ? 'Desactivar' : 'Activar'} width={300} height={200} bottomButtons={buttons}>
-        <p className='text-center'>{`¿Desea ${select.status ? 'desactivar ' : 'activar'} este registro?`}</p>
-      </AppPopup>
+        <AppPopup ref={popupRef} />
+        <AppToast ref={toastRef}/>
+      </div>
     </div>
   );
 };

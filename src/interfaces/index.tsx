@@ -30,8 +30,9 @@ interface GridColumn {
 interface DataGridProps {
   data: Product[];
   columns: any[]; // Assuming 'any' for now, can be more specific later
-  keyExpr: string;
+  keyExpr?: string;
   toolbarItems?: any[]; // New prop for toolbar content
+  repaintChangesOnly?: boolean;
 }
 
 //Interfaces de Form
@@ -52,6 +53,7 @@ interface FormItemProps {
 }
 
 interface FormProps {
+    ref: any;
     formData: any; 
     items: FormItemProps[];
     colCount?: number;
@@ -80,9 +82,14 @@ type ToastType = "success" | "error" | "warning" | "info";
 interface ToastProps {
   visible: boolean;
   message: string;
-  type?: ToastType;
+  type: ToastType;
   displayTime?: number;
   onHiding?: () => void;
+}
+
+interface ToastRef {
+  show: (message: string, type: ToastType) => void;
+  hide: () => void;
 }
 
 //Popup
@@ -96,6 +103,11 @@ interface PopupProps {
   bottomButtons?: any[];
 }
 
+interface PopupRef {
+  show: (title: string, description: string, onAccept?: () => void, onCancel?: () => void) => void;
+  hide: () => void;
+}
+
 export type { 
     GridColumn,
     DataGridProps,
@@ -105,5 +117,7 @@ export type {
     MultiViewProps,
     Product,
     ToastProps,
-    PopupProps
+    ToastRef,
+    PopupProps,
+    PopupRef
 };

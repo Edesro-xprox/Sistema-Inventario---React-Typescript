@@ -7,12 +7,14 @@ function AppDataGrid({
     data,
     columns,
     keyExpr,
-    toolbarItems
+    toolbarItems,
+    repaintChangesOnly
 }: DataGridProps) {
     return (
         <DataGrid
         dataSource={data}
         keyExpr={keyExpr}
+        repaintChangesOnly={repaintChangesOnly}
         showBorders={true}
         columnAutoWidth={true}
         >

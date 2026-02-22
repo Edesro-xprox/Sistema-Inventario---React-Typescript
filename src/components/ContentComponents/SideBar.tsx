@@ -8,7 +8,6 @@ const SideBar = () => {
   const navigate = useNavigate();
 
   const handleSettingsClick = () => {
-    // Handle settings button click
     navigate("/loginPage");
   }
 
